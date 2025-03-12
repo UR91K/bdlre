@@ -1,0 +1,63 @@
+# Topic: Cybersecurity Training
+# Description: Main entry point for cybersecurity training modules
+# Author: Security Trainer
+# Version: 1.0
+
+# Global state management
+$global_vars: {
+    user_name: "",
+    current_module: "",
+    last_node: "",
+    score: 0,
+    completed_modules: {},
+    session_start_time: ""
+}
+
+@start
+Welcome to Cybersecurity Training!
+!{getCurrentTime} : ~{time} ~{next}
+${time}
+
+What's your name?
+!{getUserInput} : ~{input} ~{next}
+-> intro
+
+@intro
+Hello ${input}! I'll be your guide through various cybersecurity topics.
+
+!{setUserName} : ~{message} ~{next}
+${message}
+
+Choose a topic to learn about:
+{password, passwords, security} -> [passwords.bdl:start]
+{network, firewall} -> [network.bdl:start]
+{help, confused, unsure} -> help_menu
+
+@help_menu
+Here's how to use the training system:
+1. Type keywords matching your choice
+2. Use 'back' to return to previous topics
+3. Use 'help' for assistance
+4. Use 'quit' to exit
+
+{back, return} -> intro
+{quit, exit} -> goodbye
+
+@return_from_module
+How was that module, ${user_name}?
+
+!{getModuleProgress} : ~{progress} ~{next}
+${progress}
+
+Would you like to:
+{continue, another} -> intro
+{quit, exit} -> goodbye
+
+@goodbye
+!{saveProgress} : ~{message} ~{next}
+${message}
+
+Thanks for training with us, ${user_name}!
+See you next time!
+
+{exit} 

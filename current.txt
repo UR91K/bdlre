@@ -1,0 +1,210 @@
+Yes, I noticed the `Bdl` prefix - good call for avoiding naming conflicts. Let's start implementing node parsing by first writing tests for the node parser. We'll build this incrementally, starting with the simplest cases.
+
+```rust:src/parser/mod.rs
+use crate::{BdlMetadata, BdlError, BdlValue, BdlDocument, BdlDestination, BdlNode, BdlContentElement, BdlBranchOption, BdlCondition};
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
+
+// ... existing code ...
+
+impl BdlParser {
+    // ... existing methods ...
+
+    /// Parse all nodes from the content
+    pub fn parse_nodes(&self, dependencies: &HashSet<String>) -> Result<HashMap<String, BdlNode>, BdlError> {
+        let mut nodes = HashMap::new();
+        let mut current_node: Option<BdlNode> = None;
+        let mut current_content = Vec::new();
+
+        for line in self.content.lines() {
+            let line = line.trim();
+            
+            // Skip empty lines and comments
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+
+            // Check for node start
+            if line.starts_with('@') {
+                // Save previous node if it exists
+                if let Some(node) = current_node.take() {
+                    nodes.insert(node.name.clone(), node);
+                }
+
+                // Start new node
+                let name = line[1..].trim().to_string();
+                if nodes.contains_key(&name) {
+                    return Err(BdlError::NodeError(format!("Duplicate node name: {}", name)));
+                }
+                current_node = Some(BdlNode::new(name));
+                current_content.clear();
+                continue;
+            }
+
+            // Process node content if we're in a node
+            if let Some(ref mut node) = current_node {
+                if line.starts_with('{') || line.starts_with("?{") {
+                    // Parse option line
+                    let option = self.parse_option(line, dependencies)?;
+                    node.options.push(option);
+                } else {
+                    // Add content line
+                    current_content.push(line.to_string());
+                    if !current_content.is_empty() {
+                        node.content.push(BdlContentElement::Text(current_content.join("\n")));
+                        current_content.clear();
+                    }
+                }
+            }
+        }
+
+        // Save last node if it exists
+        if let Some(node) = current_node {
+            nodes.insert(node.name.clone(), node);
+        }
+
+        Ok(nodes)
+    }
+
+    /// Parse a single option line
+    fn parse_option(&self, line: &str, dependencies: &HashSet<String>) -> Result<BdlBranchOption, BdlError> {
+        // TODO: Implement option parsing
+        unimplemented!("Option parsing not yet implemented")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ... existing tests ...
+
+    #[test]
+    fn test_parse_empty_node() {
+        let content = "@empty_node";
+        let parser = BdlParser::new(content.to_string());
+        let deps = create_test_dependencies();
+        
+        let nodes = parser.parse_nodes(&deps).unwrap();
+        assert_eq!(nodes.len(), 1);
+        
+        let node = nodes.get("empty_node").unwrap();
+        assert_eq!(node.name, "empty_node");
+        assert!(node.content.is_empty());
+        assert!(node.options.is_empty());
+    }
+
+    #[test]
+    fn test_parse_text_only_node() {
+        let content = r#"
+@greeting
+Hello, this is some text content.
+It can span multiple lines.
+"#;
+        let parser = BdlParser::new(content.to_string());
+        let deps = create_test_dependencies();
+        
+        let nodes = parser.parse_nodes(&deps).unwrap();
+        assert_eq!(nodes.len(), 1);
+        
+        let node = nodes.get("greeting").unwrap();
+        assert_eq!(node.name, "greeting");
+        assert_eq!(node.content.len(), 1);
+        
+        match &node.content[0] {
+            BdlContentElement::Text(text) => {
+                assert!(text.contains("Hello, this is some text content"));
+                assert!(text.contains("It can span multiple lines"));
+            },
+            _ => panic!("Expected Text content"),
+        }
+    }
+
+    #[test]
+    fn test_duplicate_node_names() {
+        let content = r#"
+@node1
+Some content
+
+@node1
+Other content
+"#;
+        let parser = BdlParser::new(content.to_string());
+        let deps = create_test_dependencies();
+        
+        assert!(matches!(
+            parser.parse_nodes(&deps),
+            Err(BdlError::NodeError(_))
+        ));
+    }
+
+    #[test]
+    fn test_multiple_nodes() {
+        let content = r#"
+@node1
+First node content
+
+@node2
+Second node content
+"#;
+        let parser = BdlParser::new(content.to_string());
+        let deps = create_test_dependencies();
+        
+        let nodes = parser.parse_nodes(&deps).unwrap();
+        assert_eq!(nodes.len(), 2);
+        assert!(nodes.contains_key("node1"));
+        assert!(nodes.contains_key("node2"));
+    }
+}
+```
+I've started with the basic node parsing structure and some initial tests. The implementation currently handles:
+
+1. Basic node structure parsing
+2. Text content (simple implementation)
+3. Node name validation
+4. Multiple nodes in a file
+
+The next steps should be:
+
+1. Implement variable interpolation parsing:
+```rust
+#[test]
+fn test_parse_variable_interpolation() {
+    let content = r#"
+@greeting
+Hello, ${user_name}!
+Your score is ${score}.
+"#;
+    // Test parsing ${var} syntax
+}
+```
+
+2. Implement function call parsing:
+```rust
+#[test]
+fn test_parse_function_calls() {
+    let content = r#"
+@password_check
+!{validatePassword} : ~{result} ~{next}
+${result}
+"#;
+    // Test parsing !{func} and ~{var} syntax
+}
+```
+
+3. Implement option parsing:
+```rust
+#[test]
+fn test_parse_options() {
+    let content = r#"
+@choice
+What would you like to do?
+{1, yes, continue} -> @next_node
+{2, no, quit} -> {exit}
+{3, help} -> [help.bdl:start]
+"#;
+    // Test different option types
+}
+```
+
+Would you like me to proceed with implementing any of these next steps? We can tackle them one at a time, following the same TDD approach.
